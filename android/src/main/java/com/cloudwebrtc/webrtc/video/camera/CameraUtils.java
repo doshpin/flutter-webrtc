@@ -44,8 +44,18 @@ public class CameraUtils {
   public CameraUtils(GetUserMediaImpl getUserMediaImpl, Activity activity) {
     this.getUserMediaImpl = getUserMediaImpl;
     this.activity = activity;
-    this.deviceOrientationManager = new DeviceOrientationManager(activity, 0);
-    this.deviceOrientationManager.start();
+    if (activity != null) {
+      // Activity is null when this plugin is registered on a FlutterEngine
+      // that was created from a Service rather than an Activity (e.g. the
+      // flutter_background_service host). DeviceOrientationManager.start
+      // calls activity.registerReceiver → NPE in that case. Skip orientation
+      // tracking entirely on engines without an Activity; the only consumers
+      // are camera modes (setFocusPoint, setExposurePoint) that need it for
+      // metering rectangle rotation. Audio-only PTT in the bg isolate does
+      // not use any of those, so this skip is safe for our use case.
+      this.deviceOrientationManager = new DeviceOrientationManager(activity, 0);
+      this.deviceOrientationManager.start();
+    }
   }
 
   public void setFocusMode(MethodCall call, AnyThreadResult result) {
@@ -215,7 +225,13 @@ public class CameraUtils {
                 cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
         MeteringRectangle focusRectangle = null;
         Size cameraBoundaries = CameraRegionUtils.getCameraBoundaries(cameraCharacteristics, captureRequestBuilder);
-        PlatformChannel.DeviceOrientation orientation = deviceOrientationManager.getLastUIOrientation();
+        // deviceOrientationManager is null when this CameraUtils was created
+        // on a Service-only FlutterEngine (no Activity). Fall back to
+        // PORTRAIT_UP since orientation tracking isn't reachable without an
+        // Activity; matches default device orientation behavior.
+        PlatformChannel.DeviceOrientation orientation = deviceOrientationManager != null
+                ? deviceOrientationManager.getLastUIOrientation()
+                : PlatformChannel.DeviceOrientation.PORTRAIT_UP;
         focusRectangle =
                 convertPointToMeteringRectangle(cameraBoundaries, focusPoint.x, focusPoint.y, orientation);
 
@@ -315,7 +331,9 @@ public class CameraUtils {
 
         MeteringRectangle exposureRectangle = null;
         Size cameraBoundaries = CameraRegionUtils.getCameraBoundaries(cameraCharacteristics, captureRequestBuilder);
-        PlatformChannel.DeviceOrientation orientation = deviceOrientationManager.getLastUIOrientation();
+        PlatformChannel.DeviceOrientation orientation = deviceOrientationManager != null
+                ? deviceOrientationManager.getLastUIOrientation()
+                : PlatformChannel.DeviceOrientation.PORTRAIT_UP;
         exposureRectangle =
                 convertPointToMeteringRectangle(cameraBoundaries, exposurePoint.x, exposurePoint.y, orientation);
         if (exposureRectangle != null) {
