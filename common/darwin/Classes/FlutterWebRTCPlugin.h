@@ -78,4 +78,11 @@ typedef void (^CapturerStopHandler)(CompletionHandler _Nonnull handler);
 
 + (FlutterWebRTCPlugin * _Nullable)sharedSingleton;
 
+/// Supplies the audio device the peer connection factory is built with, in
+/// place of WebRTC's built-in one (for example an app-owned audio unit).
+/// Must be set before the plugin initializes WebRTC. A nil provider, or one
+/// returning nil, keeps the built-in device.
++ (void)setAudioDeviceProvider:
+    (id<RTCAudioDevice> _Nullable (^_Nullable)(void))provider;
+
 @end

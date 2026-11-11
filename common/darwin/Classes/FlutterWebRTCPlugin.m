@@ -108,6 +108,12 @@ void postEvent(FlutterEventSink _Nonnull sink, id _Nullable event) {
 #endif
 }
 
+static id<RTCAudioDevice> _Nullable (^audioDeviceProvider)(void);
+
++ (void)setAudioDeviceProvider:(id<RTCAudioDevice> _Nullable (^_Nullable)(void))provider {
+  audioDeviceProvider = [provider copy];
+}
+
 static FlutterWebRTCPlugin *sharedSingleton;
 
 + (FlutterWebRTCPlugin *)sharedSingleton
@@ -254,11 +260,19 @@ bypassVoiceProcessing:(BOOL)bypassVoiceProcessing {
         VideoEncoderFactorySimulcast* simulcastFactory =
             [[VideoEncoderFactorySimulcast alloc] initWithPrimary:encoderFactory fallback:encoderFactory];
 
-        _peerConnectionFactory =
-            [[RTCPeerConnectionFactory alloc] initWithBypassVoiceProcessing:bypassVoiceProcessing
-                                                             encoderFactory:simulcastFactory
-                                                             decoderFactory:decoderFactory
-                                                      audioProcessingModule:_audioManager.audioProcessingModule];
+        id<RTCAudioDevice> audioDevice = audioDeviceProvider ? audioDeviceProvider() : nil;
+        if (audioDevice != nil) {
+            _peerConnectionFactory =
+                [[RTCPeerConnectionFactory alloc] initWithEncoderFactory:simulcastFactory
+                                                          decoderFactory:decoderFactory
+                                                             audioDevice:audioDevice];
+        } else {
+            _peerConnectionFactory =
+                [[RTCPeerConnectionFactory alloc] initWithBypassVoiceProcessing:bypassVoiceProcessing
+                                                                 encoderFactory:simulcastFactory
+                                                                 decoderFactory:decoderFactory
+                                                          audioProcessingModule:_audioManager.audioProcessingModule];
+        }
 
         RTCPeerConnectionFactoryOptions *options = [[RTCPeerConnectionFactoryOptions alloc] init];
         for (NSString* adapter in networkIgnoreMask)
